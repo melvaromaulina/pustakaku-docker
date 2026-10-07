@@ -1,0 +1,47 @@
+services:
+  web:
+    build: .
+    container_name: pustakaku_web
+    ports:
+      - "8080:80"
+    env_file: .env
+    volumes:
+      - ./src:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pustaka-net
+
+  db:
+    image: mysql:8.0
+    container_name: pustakaku_db
+    env_file: .env
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pustaka-net
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: pustakaku_pma
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+    depends_on:
+      - db
+    networks:
+      - pustaka-net
+
+volumes:
+  db_data:
+
+networks:
+  pustaka-net:
