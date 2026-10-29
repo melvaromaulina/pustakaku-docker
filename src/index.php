@@ -1,5 +1,5 @@
 <?php
-$judul = 'Berando';
+$judul = 'Beranda';
 require __DIR__ . '/includes/header.php';
 $warna = ['#14403b', '#2f6f62', '#c08a2e', '#7a3b2e', '#264f73', '#5b4b8a', '#3d6b3a'];
 $tinggi = [170, 210, 190, 230, 160, 200, 180, 220, 175, 205];
@@ -9,7 +9,7 @@ $terbaru = $db->query("SELECT * FROM books ORDER BY id DESC LIMIT 4");
   <div class="container">
     <div class="row align-items-end g-5">
       <div class="col-lg-6">
-        <h1>Pinjam buku tanpa antre.</h1>
+        <h1>Pinjam buku tanpa beban.</h1>
         <p class="mt-3">Cari buku, ajukan peminjaman dari rumah, dan pantau jatuh tempo serta denda dalam satu tempat.</p>
         <div class="d-flex gap-2 mt-4">
           <a href="/register.php" class="btn btn-brass btn-lg px-4">Daftar anggota</a>
