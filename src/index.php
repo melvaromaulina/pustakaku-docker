@@ -1,5 +1,5 @@
 <?php
-$judul = 'Beranda';
+$judul = 'Berando';
 require __DIR__ . '/includes/header.php';
 $warna = ['#14403b', '#2f6f62', '#c08a2e', '#7a3b2e', '#264f73', '#5b4b8a', '#3d6b3a'];
 $tinggi = [170, 210, 190, 230, 160, 200, 180, 220, 175, 205];
