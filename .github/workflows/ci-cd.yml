@@ -50,8 +50,18 @@ jobs:
           docker run -d --name ci-web --network ci-net -p 8080:80 \
             -e DB_HOST=ci-db -e MYSQL_DATABASE=pustakaku \
             -e MYSQL_USER=pustaka -e MYSQL_PASSWORD=pustaka123 pustakaku-web:ci
-          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://localhost:8080/ | grep -q "PustakaKu"
-          curl -fsS http://localhost:8080/login.php | grep -q "Masuk"
+          for i in $(seq 1 30); do
+            if curl -fsSL -o /tmp/beranda.html http://localhost:8080/; then
+              echo "Web siap"
+              break
+            fi
+            echo "Menunggu web siap... ($i)"
+            sleep 2
+          done
+          curl -fsSL -o /tmp/beranda.html http://localhost:8080/
+          grep -q "PustakaKu" /tmp/beranda.html
+          curl -fsSL -o /tmp/login.html http://localhost:8080/login.php
+          grep -q "Masuk" /tmp/login.html
           echo "Tes lolos: beranda dan login terbuka, aplikasi tersambung ke database"
 
       - name: Tampilkan log jika gagal
