@@ -1,0 +1,52 @@
+services:
+  web:
+    image: melvasitorus/pustakaku-web:latest
+    container_name: pustakaku_web_hub
+    ports:
+      - "8080:80"
+    environment:
+      DB_HOST: db
+      MYSQL_DATABASE: pustakaku
+      MYSQL_USER: pustaka
+      MYSQL_PASSWORD: pustaka123
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pustaka-net
+
+  db:
+    image: melvasitorus/pustakaku-db:1.0
+    container_name: pustakaku_db_hub
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass123
+      MYSQL_DATABASE: pustakaku
+      MYSQL_USER: pustaka
+      MYSQL_PASSWORD: pustaka123
+    volumes:
+      - db_data_hub:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - pustaka-net
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: pustakaku_pma_hub
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: db
+    depends_on:
+      - db
+    networks:
+      - pustaka-net
+
+volumes:
+  db_data_hub:
+
+networks:
+  pustaka-net:

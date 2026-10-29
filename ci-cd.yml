@@ -1,0 +1,119 @@
+name: CI-CD PustakaKu
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:        # tombol "Run workflow" manual di tab Actions
+
+env:
+  DOCKERHUB_USER: melvasitorus
+
+jobs:
+  # ---------------------------------------------------------------
+  # CI: cek kode, build image, tes aplikasi berjalan
+  # ---------------------------------------------------------------
+  ci:
+    name: CI - cek, build, dan tes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Cek syntax semua file PHP
+        run: |
+          docker run --rm -v "$PWD/src:/app" -w /app php:8.2-cli \
+            sh -c 'find . -name "*.php" -print0 | xargs -0 -n1 php -l'
+
+      - name: Build image web
+        run: docker build -t pustakaku-web:ci .
+
+      - name: Build image database
+        run: docker build -f Dockerfile.db -t pustakaku-db:ci .
+
+      - name: Jalankan database dan tunggu siap
+        run: |
+          docker network create ci-net
+          docker run -d --name ci-db --network ci-net \
+            -e MYSQL_ROOT_PASSWORD=rootpass123 -e MYSQL_DATABASE=pustakaku \
+            -e MYSQL_USER=pustaka -e MYSQL_PASSWORD=pustaka123 pustakaku-db:ci
+          for i in $(seq 1 40); do
+            docker exec ci-db mysql -h127.0.0.1 -uroot -prootpass123 pustakaku \
+              -e "SELECT 1 FROM users LIMIT 1" >/dev/null 2>&1 && echo "Database siap" && exit 0
+            sleep 3
+          done
+          echo "Database tidak siap"; exit 1
+
+      - name: Jalankan web dan tes halaman
+        run: |
+          docker run -d --name ci-web --network ci-net -p 8080:80 \
+            -e DB_HOST=ci-db -e MYSQL_DATABASE=pustakaku \
+            -e MYSQL_USER=pustaka -e MYSQL_PASSWORD=pustaka123 pustakaku-web:ci
+          curl --retry 15 --retry-delay 2 --retry-connrefused -fsS http://localhost:8080/ | grep -q "PustakaKu"
+          curl -fsS http://localhost:8080/login.php | grep -q "Masuk"
+          echo "Tes lolos: beranda dan login terbuka, aplikasi tersambung ke database"
+
+      - name: Tampilkan log jika gagal
+        if: failure()
+        run: |
+          docker logs ci-db || true
+          docker logs ci-web || true
+
+  # ---------------------------------------------------------------
+  # CD (1): kirim image ke Docker Hub (hanya saat push ke main)
+  # ---------------------------------------------------------------
+  push-image:
+    name: CD - push image ke Docker Hub
+    needs: ci
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build dan push image web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.DOCKERHUB_USER }}/pustakaku-web:latest
+            ${{ env.DOCKERHUB_USER }}/pustakaku-web:${{ github.sha }}
+
+      - name: Build dan push image database
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.db
+          push: true
+          tags: |
+            ${{ env.DOCKERHUB_USER }}/pustakaku-db:latest
+            ${{ env.DOCKERHUB_USER }}/pustakaku-db:${{ github.sha }}
+
+  # ---------------------------------------------------------------
+  # CD (2): deploy otomatis lewat runner di laptop sendiri
+  # Job ini dilewati sampai variabel DEPLOY_ENABLED bernilai true
+  # (GitHub: Settings > Secrets and variables > Actions > Variables)
+  # ---------------------------------------------------------------
+  deploy:
+    name: CD - deploy ke laptop (self-hosted runner)
+    needs: push-image
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ambil image terbaru dan jalankan
+        run: |
+          docker compose -f docker-compose.hub.yml pull
+          docker compose -f docker-compose.hub.yml up -d
+
+      - name: Cek status
+        run: docker compose -f docker-compose.hub.yml ps

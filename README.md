@@ -121,3 +121,19 @@ Nama	NIM	Kontribusi
 [Hotnida Junita Pasaribu]	[221111292]	Halaman admin
 [Karin Kenisa Br Sitepu]	[231111550]	Halaman anggota, laporan, video
 Catatan
+
+## Menjalankan dari Docker Hub (tanpa build)
+
+Image tersedia di Docker Hub:
+- https://hub.docker.com/r/melvasitorus/pustakaku-web
+- https://hub.docker.com/r/melvasitorus/pustakaku-db
+
+Simpan file `docker-compose.hub.yml`, lalu jalankan:
+
+    docker compose -f docker-compose.hub.yml up -d
+
+Buka http://localhost:8080 (admin: admin@pustaka.id / admin123) dan http://localhost:8081 (phpMyAdmin: server db, user root, password rootpass123).
+
+## Kenapa database sudah berisi data di awal?
+
+File `db/init.sql` ditaruh di folder `/docker-entrypoint-initdb.d/` pada image MySQL. Image MySQL menjalankan file di folder itu satu kali, saat database pertama kali dibuat (data masih kosong). Isinya membuat tabel users, books, loans beserta data contoh. Saat container di-restart, skrip tidak dijalankan lagi karena data sudah tersimpan di volume. Skrip baru jalan lagi jika volume dihapus (`docker compose down -v`).
