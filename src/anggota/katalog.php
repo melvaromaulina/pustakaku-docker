@@ -26,12 +26,25 @@ function kartu_buku($b, $warna) {
     </div>
 <?php }
 
-$q = trim($_GET['q'] ?? '');
+// FITUR BARU (CI/CD) tahap 1
+$q = trim((string)($_GET['q'] ?? ''));
+$kat = trim((string)($_GET['kategori'] ?? ''));
+$order = 'judul ASC';
+
 $like = '%' . $q . '%';
-$stmt = $db->prepare("SELECT * FROM books WHERE judul LIKE ? OR penulis LIKE ? ORDER BY judul");
-$stmt->bind_param('ss', $like, $like);
+$sql = "SELECT * FROM books WHERE (judul LIKE ? OR penulis LIKE ?)";
+$tipe = 'ss';
+$param = [$like, $like];
+if ($kat !== '') { $sql .= " AND kategori = ?"; $tipe .= 's'; $param[] = $kat; }
+$sql .= " ORDER BY " . $order;
+$stmt = $db->prepare($sql);
+$stmt->bind_param($tipe, ...$param);
 $stmt->execute();
 $buku = $stmt->get_result();
+$jumlah = $buku->num_rows;
+$filter_aktif = ($q !== '' || $kat !== '');
+
+$daftar_kategori = $db->query("SELECT DISTINCT kategori FROM books WHERE kategori <> '' ORDER BY kategori")->fetch_all(MYSQLI_ASSOC);
 
 // FITUR PEMBEDA 1: pengingat jatuh tempo (H-2 sampai terlambat)
 $s = $db->prepare("SELECT b.judul, DATEDIFF(l.tgl_jatuh_tempo, CURDATE()) AS sisa
@@ -45,7 +58,7 @@ $pengingat = $s->get_result()->fetch_all(MYSQLI_ASSOC);
 
 // FITUR PEMBEDA 2: rekomendasi berdasarkan kategori yang paling sering dipinjam
 $rekomendasi = []; $alasan = '';
-if ($q === '') {
+if ($q === '' && $kat === '') {
     $s = $db->prepare("SELECT b.kategori FROM loans l JOIN books b ON b.id = l.book_id
                        WHERE l.user_id = ? AND l.status <> 'Ditolak' AND b.kategori <> ''
                        GROUP BY b.kategori ORDER BY COUNT(*) DESC LIMIT 1");
@@ -81,12 +94,30 @@ require __DIR__ . '/../includes/header.php';
       <h1 class="h2 mb-1">Katalog buku</h1>
       <p class="text-secondary mb-0">Halo, <?= e($_SESSION['user']['nama']) ?>. Pilih buku yang ingin dipinjam.</p>
     </div>
-    <form class="d-flex gap-2" method="get">
-      <input class="form-control" name="q" placeholder="Cari judul atau penulis" value="<?= e($q) ?>">
-      <button class="btn btn-forest"><i class="bi bi-search"></i></button>
-    </form>
   </div>
   <?php show_flash(); ?>
+
+  <form class="panel mb-4" method="get">
+    <div class="row g-2 align-items-end">
+      <div class="col-lg-6">
+        <label class="form-label small mb-1" for="q">Cari</label>
+        <input class="form-control" id="q" name="q" placeholder="Judul atau penulis" value="<?= e($q) ?>">
+      </div>
+      <div class="col-lg-4">
+        <label class="form-label small mb-1" for="kategori">Kategori</label>
+        <select class="form-select" id="kategori" name="kategori">
+          <option value="">Semua kategori</option>
+          <?php foreach ($daftar_kategori as $k): ?>
+            <option value="<?= e($k['kategori']) ?>" <?= $kat === $k['kategori'] ? 'selected' : '' ?>><?= e($k['kategori']) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-lg-2 d-flex gap-2">
+        <button class="btn btn-forest flex-fill"><i class="bi bi-funnel me-1"></i>Terapkan</button>
+        <?php if ($filter_aktif): ?><a class="btn btn-outline-secondary" href="/anggota/katalog.php" title="Reset filter"><i class="bi bi-x-lg"></i></a><?php endif; ?>
+      </div>
+    </div>
+  </form>
 
   <?php foreach ($pengingat as $p):
       $sisa = (int)$p['sisa'];
@@ -111,7 +142,7 @@ require __DIR__ . '/../includes/header.php';
 
   <div class="row g-4">
     <?php if ($buku->num_rows === 0): ?>
-      <div class="col-12"><div class="panel text-center">Tidak ada buku untuk "<?= e($q) ?>". Coba kata kunci lain.</div></div>
+      <div class="col-12"><div class="panel text-center">Tidak ada buku yang cocok dengan filter. Coba ubah kata kunci atau kategori.</div></div>
     <?php endif; ?>
     <?php while ($b = $buku->fetch_assoc()) kartu_buku($b, $warna); ?>
   </div>
